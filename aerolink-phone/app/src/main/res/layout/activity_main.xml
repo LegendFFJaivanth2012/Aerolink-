@@ -67,7 +67,7 @@
 
                 <TextView
                     android:id="@+id/mode"
-                    android:text="TWO ESP32 NODES · TWO PHONES"
+                    android:text="DIRECT WI-FI · NO ESP32 · NO CLOUD"
                     android:textColor="#69E7FF"
                     android:textStyle="bold"
                     android:textSize="10sp"
@@ -77,7 +77,7 @@
 
                 <TextView
                     android:id="@+id/instruction"
-                    android:text="Choose a mode, or train your hand profile first."
+                    android:text="Choose SEND or RECEIVE, then train your gesture."
                     android:textColor="#EAF4FF"
                     android:textSize="21sp"
                     android:textStyle="bold"
@@ -87,7 +87,7 @@
 
                 <TextView
                     android:id="@+id/telemetry"
-                    android:text="Connect this phone to its AEROLINK ESP32 Wi-Fi network."
+                    android:text="Direct local Wi-Fi transfer · internet not required"
                     android:textColor="#9BB0C3"
                     android:textSize="12sp"
                     android:lineSpacingExtra="3dp"
@@ -127,7 +127,7 @@
 
                 <Button
                     android:id="@+id/trainGestures"
-                    android:text="TRAIN MY GESTURES"
+                    android:text="TRAIN MY GESTURE"
                     android:textAllCaps="false"
                     android:textStyle="bold"
                     android:textColor="#03101B"
@@ -138,7 +138,7 @@
 
                 <TextView
                     android:id="@+id/sensitivityLabel"
-                    android:text="GESTURE SENSITIVITY · HIGH · 65%"
+                    android:text="PINCH SENSITIVITY · 65%"
                     android:textColor="#B9D0E2"
                     android:textStyle="bold"
                     android:textSize="10sp"
@@ -172,7 +172,7 @@
 
                 <Button
                     android:id="@+id/discover"
-                    android:text="TURN ON DISCOVERABLE MODE"
+                    android:text="ARM RECEIVER"
                     android:textAllCaps="false"
                     android:textStyle="bold"
                     android:textColor="#EAF4FF"
