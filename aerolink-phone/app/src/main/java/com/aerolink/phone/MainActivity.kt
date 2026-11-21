@@ -39,6 +39,7 @@ import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.Executors
 import kotlin.math.hypot
@@ -357,23 +358,24 @@ class MainActivity : AppCompatActivity() {
         receiverJob = lifecycleScope.launch {
             var server: ServerSocket? = null
             try {
-                server = withContext(Dispatchers.IO) {
+                val activeServer = withContext(Dispatchers.IO) {
                     ServerSocket().apply {
                         reuseAddress = true
                         bind(InetSocketAddress(0))
                         soTimeout = RECEIVE_WINDOW_MS
                     }
                 }
-                receiverSocket = server
+                server = activeServer
+                receiverSocket = activeServer
 
-                registerReceiverService(server.localPort, token)
+                registerReceiverService(activeServer.localPort, token)
                 delay(900)
 
                 status.text = "WI-FI RECEIVER ACTIVE"
                 instruction.text = "Receiver armed. Keep this screen open while the sender performs its gesture."
                 telemetry.text = "Discoverable on local Wi-Fi · " + localWifiAddress()
 
-                val client = withContext(Dispatchers.IO) { server.accept() }
+                val client = withContext(Dispatchers.IO) { activeServer.accept() }
                 client.use { socket ->
                     socket.soTimeout = 120000
                     withContext(Dispatchers.IO) { handleIncomingUpload(socket, token) }
