@@ -1,0 +1,11 @@
+{
+  "name": "aerolink-relay",
+  "version": "0.31.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  }
+}
