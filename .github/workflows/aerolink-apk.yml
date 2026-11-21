@@ -32,7 +32,7 @@ jobs:
       - name: Download MediaPipe hand model
         run: |
           mkdir -p aerolink-phone/app/src/main/assets
-          curl -L --fail --retry 3             "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task"             -o aerolink-phone/app/src/main/assets/hand_landmarker.task
+          curl -L --fail --retry 3 "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task" -o aerolink-phone/app/src/main/assets/hand_landmarker.task
 
       - name: Build APK
         working-directory: aerolink-phone
@@ -41,12 +41,12 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p dist
-          cp aerolink-phone/app/build/outputs/apk/debug/app-debug.apk dist/AEROLINK-v0.31.apk
+          cp aerolink-phone/app/build/outputs/apk/debug/app-debug.apk dist/AEROLINK-v0.32.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AEROLINK-v0.31-apk
-          path: dist/AEROLINK-v0.31.apk
+          name: AEROLINK-v0.32-apk
+          path: dist/AEROLINK-v0.32.apk
           if-no-files-found: error
           retention-days: 14
