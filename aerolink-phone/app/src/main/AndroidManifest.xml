@@ -8,7 +8,7 @@
     <application
         android:theme="@style/Theme.AeroLink"
         android:label="AEROLINK"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:allowBackup="false"
         android:supportsRtl="true">
         <activity
