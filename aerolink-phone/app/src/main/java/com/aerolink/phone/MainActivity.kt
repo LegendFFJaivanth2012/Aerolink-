@@ -44,11 +44,11 @@ class MainActivity : AppCompatActivity() {
     private var training = false
     private var samples = 0
     private var selectedUri: Uri? = null
-    private var requestId = ""
+    private var transferStarted = false
     private var lastGestureAt = 0L
 
     private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) startCamera() }
-    private val picker = registerForActivityResult(ActivityResultContracts.GetContent()) { selectedUri = it; if (it != null) { status.text = "FILE READY"; instruction.text = "Wait for the receiver gesture request." } }
+    private val picker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri -> selectedUri = uri; transferStarted = false; if (uri != null) { status.text = "FILE READY"; instruction.text = "Perform your trained $gesture gesture to send."; if (role == "sender") startCamera() } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,9 +73,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun chooseSender() {
-        role = "sender"; findViewById<Button>(R.id.selectFile).visibility = Button.VISIBLE; findViewById<Button>(R.id.discover).visibility = Button.GONE
-        status.text = "SENDER READY"; instruction.text = "Choose a file, then wait for receiver authorization request."; telemetry.text = "Sender approval is required before every transfer."; stopCamera()
-        lifecycleScope.launch { pollAccessRequests() }
+        role = "sender"
+        transferStarted = false
+        receiverPolling = false
+        findViewById<Button>(R.id.selectFile).visibility = Button.VISIBLE
+        findViewById<Button>(R.id.discover).visibility = Button.GONE
+        status.text = "SENDER READY"
+        instruction.text = "Choose a file, then perform your trained $gesture gesture to send."
+        telemetry.text = "Gesture recognition starts the transfer. No approval popup is used."
+        stopCamera()
     }
 
     private fun chooseReceiver() {
@@ -84,7 +90,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startReceiver() { if (role != "receiver") return; status.text = "DISCOVERABLE"; instruction.text = "Perform your trained $gesture gesture."; telemetry.text = "Gesture detection active."; startCamera() }
-    private fun reset() { role = ""; training = false; stopCamera(); status.text = "READY"; instruction.text = "Choose SEND or RECEIVE."; telemetry.text = "AeroLink v0.30" }
+    private fun reset() { role = ""; training = false; transferStarted = false; receiverPolling = false; selectedUri = null; stopCamera(); status.text = "READY"; instruction.text = "Choose SEND or RECEIVE."; telemetry.text = "AeroLink v0.30" }
 
     private fun startCamera() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) { cameraPermission.launch(Manifest.permission.CAMERA); return }
@@ -114,35 +120,41 @@ class MainActivity : AppCompatActivity() {
         val extended = listOf(8,12,16,20).count { hand[it].y() < hand[it-2].y() }
         val detected = when (gesture) { "PINCH" -> pinch < 0.075f; "OPEN_PALM" -> extended >= 4; "FIST" -> extended <= 1; "TWO_FINGERS" -> extended == 2; else -> extended == 1 }
         runOnUiThread {
-            if (training && detected) { samples++; instruction.text = "Perform $gesture · Samples: ${samples.coerceAtMost(12)}/12"; if (samples >= 12) finishTraining() }
-            else if (!training && role == "receiver" && detected && System.currentTimeMillis() - lastGestureAt > 2500) { lastGestureAt = System.currentTimeMillis(); createAccessRequest() }
+            if (training && detected) {
+                samples++
+                instruction.text = "Perform $gesture · Samples: ${samples.coerceAtMost(12)}/12"
+                if (samples >= 12) finishTraining()
+            } else if (!training && detected && System.currentTimeMillis() - lastGestureAt > 2500) {
+                lastGestureAt = System.currentTimeMillis()
+                if (role == "receiver" && !receiverPolling) {
+                    receiverPolling = true
+                    status.text = "CATCH DETECTED"
+                    instruction.text = "Gesture recognized. Waiting for incoming file…"
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        waitForFile()
+                        withContext(Dispatchers.Main) {
+                            receiverPolling = false
+                        }
+                    }
+                } else if (role == "sender" && selectedUri != null && !transferStarted) {
+                    transferStarted = true
+                    status.text = "GESTURE DETECTED"
+                    instruction.text = "Gesture recognized. Sending file…"
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        runCatching { sendFile() }.onFailure { error ->
+                            withContext(Dispatchers.Main) {
+                                transferStarted = false
+                                status.text = "SEND FAILED"
+                                instruction.text = error.message ?: "Could not send file."
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
     private fun finishTraining() { training = false; prefs.edit().putLong("trainedAt", System.currentTimeMillis()).apply(); status.text = "GESTURE READY"; instruction.text = "$gesture is trained and ready to use."; telemetry.text = "12 successful calibration samples saved on this phone."; stopCamera() }
-
-    private fun createAccessRequest() {
-        requestId = UUID.randomUUID().toString().replace("-", "").take(16); status.text = "REQUESTING"; instruction.text = "Waiting for sender approval…"; telemetry.text = "Request $requestId"
-        lifecycleScope.launch(Dispatchers.IO) { post("/api/access/request?id=${enc(requestId)}", "POST"); waitForApproval() }
-    }
-
-    private suspend fun waitForApproval() {
-        repeat(60) {
-            delay(1000); val body = get("/api/access/status?id=${enc(requestId)}") ?: return@repeat; val state = JSONObject(body).optString("state")
-            if (state == "allowed") { withContext(Dispatchers.Main) { status.text = "AUTHORIZED"; instruction.text = "Sender approved. Waiting for file…"; telemetry.text = "Transfer authorization accepted." }; waitForFile(); return }
-            if (state == "denied") { withContext(Dispatchers.Main) { status.text = "DENIED"; instruction.text = "Sender denied this transfer." }; return }
-        }
-    }
-
-    private suspend fun pollAccessRequests() {
-        while (role == "sender") {
-            delay(1000); val body = get("/api/access/pending") ?: continue; val json = JSONObject(body); if (!json.optBoolean("pending")) continue
-            val id = json.optString("id"); if (id.isBlank()) continue
-            withContext(Dispatchers.Main) { AlertDialog.Builder(this@MainActivity).setTitle("AeroLink Access Request").setMessage("A nearby receiver wants to receive a file. Allow this transfer?").setNegativeButton("DENY") { _, _ -> respond(id, false) }.setPositiveButton("ALLOW") { _, _ -> respond(id, true) }.setCancelable(false).show() }
-        }
-    }
-
-    private fun respond(id: String, allow: Boolean) { lifecycleScope.launch(Dispatchers.IO) { post("/api/access/${if (allow) "allow" else "deny"}?id=${enc(id)}", "POST"); if (allow) sendFile() else withContext(Dispatchers.Main) { status.text = "ACCESS DENIED" } } }
 
     private suspend fun sendFile() {
         val uri = selectedUri ?: return
@@ -150,7 +162,7 @@ class MainActivity : AppCompatActivity() {
         val name = displayName(uri); val size = fileSize(uri); if (size < 0L) error("Could not determine file size.")
         val chunk = 1024; val total = maxOf(1, ((size + chunk - 1) / chunk).toInt()); val id = UUID.randomUUID().toString().replace("-", "").take(16)
         contentResolver.openInputStream(uri)?.use { input -> for (seq in 0 until total) { val wanted = minOf(chunk.toLong(), size - seq.toLong()*chunk).toInt().coerceAtLeast(0); val data = ByteArray(wanted); var off=0; while(off<wanted){ val n=input.read(data,off,wanted-off); if(n<0) error("Unexpected end of file"); off+=n }; postChunk(id,seq,total,name,data); withContext(Dispatchers.Main){ status.text="SENDING · ${((seq+1)*100/total)}%" } } } ?: error("Could not open selected file.")
-        withContext(Dispatchers.Main) { status.text="SENT"; instruction.text="Transfer complete." }
+        withContext(Dispatchers.Main) { status.text="SENT"; instruction.text="Transfer complete."; transferStarted = false }
     }
 
     private suspend fun waitForFile() { repeat(180) { delay(900); val body=get("/api/status") ?: return@repeat; val j=JSONObject(body); if(j.optBoolean("complete")){ withContext(Dispatchers.Main){ status.text="FILE READY"; instruction.text="Received ${j.optString("name","file")}" }; return } } }
