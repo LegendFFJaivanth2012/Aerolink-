@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private var samples = 0
     private var selectedUri: Uri? = null
     private var transferStarted = false
+    private var receiverPolling = false
     private var lastGestureAt = 0L
 
     private val cameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { if (it) startCamera() }
