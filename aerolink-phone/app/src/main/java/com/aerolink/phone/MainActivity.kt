@@ -417,8 +417,8 @@ class MainActivity : AppCompatActivity() {
             serviceName = "AeroLink-" + token.take(6).uppercase()
             serviceType = SERVICE_TYPE
             this.port = port
-            setAttribute("token", token.toByteArray(Charsets.UTF_8))
-            setAttribute("version", "32".toByteArray(Charsets.UTF_8))
+            setAttribute("token", token)
+            setAttribute("version", "32")
         }
 
         val listener = object : NsdManager.RegistrationListener {
